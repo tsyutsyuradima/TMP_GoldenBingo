@@ -32,59 +32,6 @@ export const BingoBoard: React.FC<BingoBoardProps> = ({
   const boardRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
-    const handleBossAction = (e: any) => {
-      const { type, index, amount } = e.detail;
-      
-      if (type === 'remove-points') {
-        const scoreEl = document.getElementById('score-display');
-        if (scoreEl) {
-          const rect = scoreEl.getBoundingClientRect();
-          const targetX = rect.left + rect.width / 2;
-          const targetY = rect.top + rect.height / 2;
-          
-          import('./ParticleCanvas').then(({ triggerProjectile, triggerExplosion }) => {
-            triggerProjectile(
-              window.innerWidth / 2,
-              window.innerHeight + 50,
-              targetX,
-              targetY,
-              "#ef4444", // Red for point removal
-              () => triggerExplosion(targetX, targetY, "#ef4444", 30)
-            );
-          });
-        }
-        return;
-      }
-
-      if (index !== undefined && boardRef.current) {
-        const cells = boardRef.current.querySelectorAll('.bingo-cell');
-        const cell = cells[index] as HTMLElement;
-        if (cell) {
-          const rect = cell.getBoundingClientRect();
-          const targetX = rect.left + rect.width / 2;
-          const targetY = rect.top + rect.height / 2;
-          
-          const color = type === 'block' ? "#64748b" : "#3b82f6"; // Slate for block, Blue for daub removal
-
-          import('./ParticleCanvas').then(({ triggerProjectile, triggerExplosion }) => {
-            triggerProjectile(
-              window.innerWidth / 2,
-              window.innerHeight + 50,
-              targetX,
-              targetY,
-              color,
-              () => triggerExplosion(targetX, targetY, color, 25)
-            );
-          });
-        }
-      }
-    };
-
-    window.addEventListener('boss-action-animation', handleBossAction);
-    return () => window.removeEventListener('boss-action-animation', handleBossAction);
-  }, []);
-
-  React.useEffect(() => {
     if (lastBingoTime > 0) {
       setShowBingo(true);
       const timer = setTimeout(() => setShowBingo(false), 2000);
@@ -172,6 +119,7 @@ export const BingoBoard: React.FC<BingoBoardProps> = ({
           return (
             <motion.div
               key={i}
+              data-cell-index={i}
               whileHover={!isMarked && !isGameOver && !isBlocked ? { scale: 1.05 } : {}}
               whileTap={!isMarked && !isGameOver && !isBlocked ? { scale: 0.95 } : {}}
               onClick={(e) => {

@@ -127,7 +127,7 @@ export const LiveBossZone: React.FC<LiveBossZoneProps> = ({
         />
 
         {/* Binky the Boss */}
-        <div className="relative w-full aspect-square flex items-center justify-center mb-6 z-10">
+        <div id="boss-projectile-start" className="relative w-full aspect-square flex items-center justify-center mb-6 z-10">
           {/* Aura Effect */}
           <motion.div
             animate={{ 

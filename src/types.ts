@@ -40,6 +40,12 @@ export interface BossState {
   nextActionProgress: number; // 0 to 100 for Active mode
 }
 
+export interface Projectile {
+  id: string;
+  type: 'block' | 'remove-daub' | 'scramble';
+  targetIndex: number;
+}
+
 export interface GameState {
   cardData: (number | "FREE")[];
   markedCells: boolean[];
@@ -53,4 +59,5 @@ export interface GameState {
   activeChoice: Cast[] | null;
   choiceTimer: number;
   lastBingoTime: number;
+  projectiles: Projectile[];
 }

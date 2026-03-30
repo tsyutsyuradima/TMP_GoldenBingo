@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { triggerProjectile } from '../components/ParticleCanvas';
 import { GameState, GameSettings, Milestone, BonusCell, Cast } from '../types';
 import { BINGO_RANGES, INITIAL_MILESTONES, TARGET_SCORE, BOSS_MESSAGES } from '../constants';
 import { BOSS_CASTS } from '../config/casts';
@@ -17,94 +18,97 @@ export function useBingoGame() {
 
   const { boss, applyBossEffect, resetBoss, setBoss, setReaction, switchBossType } = useBossLogic(gameState.isGameOver);
 
-  // Handle Active Boss Actions
+  // Handle Active Boss Actions with Flying Projectiles
   useEffect(() => {
     if (boss.type === 'active' && boss.currentAction) {
+      const startEl = document.getElementById('boss-projectile-start');
+      if (!startEl) return;
+      const startRect = startEl.getBoundingClientRect();
+      const startX = startRect.left + startRect.width / 2;
+      const startY = startRect.top + startRect.height / 2;
+
       if (boss.currentAction === 'block') {
-        setGameState(prev => {
-          const availableIndices = prev.cardData.map((_, i) => i).filter(i => i !== 12 && !prev.boss.blockedCells.includes(i));
-          if (availableIndices.length === 0) return prev;
+        const availableIndices = gameState.cardData.map((_, i) => i).filter(i => i !== 12 && !gameState.boss.blockedCells.includes(i));
+        if (availableIndices.length > 0) {
           const randomIdx = availableIndices[Math.floor(Math.random() * availableIndices.length)];
-          
-          window.dispatchEvent(new CustomEvent('boss-action-animation', { 
-            detail: { type: 'block', index: randomIdx } 
-          }));
+          const endEl = document.querySelector(`[data-cell-index="${randomIdx}"]`);
+          if (endEl) {
+            const endRect = endEl.getBoundingClientRect();
+            triggerProjectile(startX, startY, endRect.left + endRect.width / 2, endRect.top + endRect.height / 2, "#ef4444", () => {
+              setGameState(prev => {
+                const newBlocked = [...prev.boss.blockedCells, randomIdx].slice(-BOSS_CONFIG.activeBoss.maxBlockedCells);
+                const newMarked = [...prev.markedCells];
+                newMarked[randomIdx] = false;
+                
+                setTimeout(() => {
+                  setBoss(curr => ({
+                    ...curr,
+                    blockedCells: curr.blockedCells.filter(id => id !== randomIdx)
+                  }));
+                }, BOSS_CONFIG.activeBoss.blockDurationMs);
 
-          const newBlocked = [...prev.boss.blockedCells, randomIdx].slice(-BOSS_CONFIG.activeBoss.maxBlockedCells);
-          
-          // If we block a marked cell, we might want to unmark it or just prevent future marks
-          // Let's just block it. If it was marked, it stays marked but "blocked" visually? 
-          // Actually, let's unmark it if it was marked to make it more annoying.
-          const newMarked = [...prev.markedCells];
-          newMarked[randomIdx] = false;
-
-          // Set a timeout to unblock
-          setTimeout(() => {
-            setBoss(curr => ({
-              ...curr,
-              blockedCells: curr.blockedCells.filter(id => id !== randomIdx)
-            }));
-          }, BOSS_CONFIG.activeBoss.blockDurationMs);
-
-          return {
-            ...prev,
-            markedCells: newMarked,
-            boss: { ...prev.boss, blockedCells: newBlocked }
-          };
-        });
-      } else if (boss.currentAction === 'remove-daub') {
-        setGameState(prev => {
-          const markedIndices = prev.markedCells.map((m, i) => m ? i : -1).filter(i => i !== -1 && i !== 12);
-          if (markedIndices.length === 0) return prev;
-          const randomIdx = markedIndices[Math.floor(Math.random() * markedIndices.length)];
-          
-          window.dispatchEvent(new CustomEvent('boss-action-animation', { 
-            detail: { type: 'remove-daub', index: randomIdx } 
-          }));
-
-          const newMarked = [...prev.markedCells];
-          newMarked[randomIdx] = false;
-          return { ...prev, markedCells: newMarked };
-        });
-      } else if (boss.currentAction === 'remove-points') {
-        setGameState(prev => {
-          const loss = Math.floor(Math.random() * 50) + 20;
-          
-          window.dispatchEvent(new CustomEvent('boss-action-animation', { 
-            detail: { type: 'remove-points', amount: loss } 
-          }));
-
-          return {
-            ...prev,
-            currentScore: Math.max(0, prev.currentScore - loss)
-          };
-        });
-      } else if (boss.currentAction === 'scramble') {
-        setGameState(prev => {
-          const markedIndices = prev.markedCells.map((m, i) => m ? i : -1).filter(i => i !== -1 && i !== 12);
-          if (markedIndices.length < 2) return prev;
-          
-          const newMarked = [...prev.markedCells];
-          const indicesToRemove: number[] = [];
-
-          for (let i = 0; i < 2; i++) {
-            const currentMarked = newMarked.map((m, idx) => m ? idx : -1).filter(idx => idx !== -1 && idx !== 12 && !indicesToRemove.includes(idx));
-            if (currentMarked.length > 0) {
-              const r = currentMarked[Math.floor(Math.random() * currentMarked.length)];
-              indicesToRemove.push(r);
-              newMarked[r] = false;
-              
-              // Dispatch animation for each removed daub
-              window.dispatchEvent(new CustomEvent('boss-action-animation', { 
-                detail: { type: 'remove-daub', index: r } 
-              }));
-            }
+                return {
+                  ...prev,
+                  markedCells: newMarked,
+                  boss: { ...prev.boss, blockedCells: newBlocked }
+                };
+              });
+            });
           }
-          return { ...prev, markedCells: newMarked };
-        });
+        }
+      } else if (boss.currentAction === 'remove-daub') {
+        const markedIndices = gameState.markedCells.map((m, i) => m ? i : -1).filter(i => i !== -1 && i !== 12);
+        if (markedIndices.length > 0) {
+          const randomIdx = markedIndices[Math.floor(Math.random() * markedIndices.length)];
+          const endEl = document.querySelector(`[data-cell-index="${randomIdx}"]`);
+          if (endEl) {
+            const endRect = endEl.getBoundingClientRect();
+            triggerProjectile(startX, startY, endRect.left + endRect.width / 2, endRect.top + endRect.height / 2, "#38bdf8", () => {
+              setGameState(prev => {
+                const newMarked = [...prev.markedCells];
+                newMarked[randomIdx] = false;
+                return { ...prev, markedCells: newMarked };
+              });
+            });
+          }
+        }
+      } else if (boss.currentAction === 'remove-points') {
+        const scoreEl = document.getElementById('score-display');
+        if (scoreEl) {
+          const rect = scoreEl.getBoundingClientRect();
+          const targetX = rect.left + rect.width / 2;
+          const targetY = rect.top + rect.height / 2;
+          triggerProjectile(startX, startY, targetX, targetY, "#f59e0b", () => {
+            setGameState(prev => {
+              const loss = Math.floor(Math.random() * 50) + 20;
+              return {
+                ...prev,
+                currentScore: Math.max(0, prev.currentScore - loss)
+              };
+            });
+          });
+        }
+      } else if (boss.currentAction === 'scramble') {
+        const markedIndices = gameState.markedCells.map((m, i) => m ? i : -1).filter(i => i !== -1 && i !== 12);
+        if (markedIndices.length >= 2) {
+          const targets = markedIndices.sort(() => 0.5 - Math.random()).slice(0, 2);
+          targets.forEach(idx => {
+            const endEl = document.querySelector(`[data-cell-index="${idx}"]`);
+            if (endEl) {
+              const endRect = endEl.getBoundingClientRect();
+              triggerProjectile(startX, startY, endRect.left + endRect.width / 2, endRect.top + endRect.height / 2, "#a855f7", () => {
+                setGameState(prev => {
+                  const newMarked = [...prev.markedCells];
+                  newMarked[idx] = false;
+                  return { ...prev, markedCells: newMarked };
+                });
+              });
+            }
+          });
+        }
       }
     }
-  }, [boss.currentAction, boss.type, setBoss]);
+  }, [boss.currentAction, boss.type]);
 
   // Sync boss state back to main game state
   useEffect(() => {
@@ -217,7 +221,8 @@ export function useBingoGame() {
       },
       activeChoice: null,
       choiceTimer: 0,
-      lastBingoTime: 0
+      lastBingoTime: 0,
+      projectiles: []
     };
   }
 
