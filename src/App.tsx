@@ -11,7 +11,6 @@ import { ScoreAttack } from './components/ScoreAttack';
 import { WinModal } from './components/WinModal';
 import { ParticleCanvas } from './components/ParticleCanvas';
 import { LiveBossZone } from './components/LiveBossZone';
-import { BossChoice } from './components/BossChoice';
 import { BINGO_COLORS } from './constants';
 
 export default function App() {
@@ -44,46 +43,6 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-sky-400 via-sky-300 to-amber-100 font-sans text-slate-900 selection:bg-blue-100 overflow-x-hidden">
       <ParticleCanvas />
-
-      {/* Screen Flash on Choice */}
-      <AnimatePresence>
-        {activeChoice && (
-          <motion.div
-            initial={{ opacity: 0.4 }}
-            animate={{ opacity: 0 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.5 }}
-            className="fixed inset-0 bg-white z-[100] pointer-events-none"
-          />
-        )}
-      </AnimatePresence>
-
-      {/* Boss Action Announcement */}
-      <AnimatePresence>
-        {boss.currentAction && (
-          <motion.div
-            initial={{ opacity: 0, y: -50, scale: 0.8 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="fixed top-4 left-1/2 -translate-x-1/2 z-[70]"
-          >
-            <div className="bg-slate-900 text-white px-5 py-2.5 rounded-full shadow-2xl border-2 border-purple-400 flex items-center gap-2">
-              <span className="text-lg">
-                {boss.currentAction === 'daub' ? '🎯' :
-                 boss.currentAction === 'powerup' ? '⚡' :
-                 boss.currentAction === 'block' ? '🚫' :
-                 boss.currentAction === 'remove-daub' ? '🧼' : '🌪️'}
-              </span>
-              <span className="text-xs font-black uppercase tracking-tight">
-                {boss.currentAction === 'daub' ? 'Binky Daubed!' :
-                 boss.currentAction === 'powerup' ? 'Binky Powerup!' :
-                 boss.currentAction === 'block' ? 'Cell Blocked!' :
-                 boss.currentAction === 'remove-daub' ? 'Daub Removed!' : 'Board Scrambled!'}
-              </span>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Decorative clouds */}
       <div className="fixed top-10 left-[10%] w-32 h-12 bg-white/20 rounded-full blur-xl pointer-events-none" />
@@ -210,15 +169,6 @@ export default function App() {
           />
         </div>
       </div>
-
-      {/* BOSS CHOICE OVERLAY */}
-      <BossChoice
-        casts={activeChoice}
-        timer={choiceTimer}
-        onSelect={applyCast}
-        onReroll={rerollChoices}
-        canReroll={currentScore >= 50}
-      />
 
       {/* WIN MODAL */}
       <WinModal

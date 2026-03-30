@@ -1,11 +1,12 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { triggerProjectile } from '../components/ParticleCanvas';
+import { fireBossProjectile, firePlayerProjectile } from '../utils/animationUtils';
 import { GameState, GameSettings, Milestone, BonusCell, Cast } from '../types';
 import { BINGO_RANGES, INITIAL_MILESTONES, TARGET_SCORE, BOSS_MESSAGES } from '../constants';
 import { BOSS_CASTS } from '../config/casts';
 import { CHOICE_TRIGGER_CONFIG } from '../config/choiceConfig';
 import { BOSS_CONFIG } from '../config/bossConfig';
 import { useBossLogic } from './useBossLogic';
+import { generateBingoCard, checkJustCompletedBingo, FREE_SPACE_INDEX } from '../utils/bingoUtils';
 
 export function useBingoGame() {
   const autoDrawTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -21,89 +22,83 @@ export function useBingoGame() {
   // Handle Active Boss Actions with Flying Projectiles
   useEffect(() => {
     if (boss.type === 'active' && boss.currentAction) {
-      const startEl = document.getElementById('boss-projectile-start');
-      if (!startEl) return;
-      const startRect = startEl.getBoundingClientRect();
-      const startX = startRect.left + startRect.width / 2;
-      const startY = startRect.top + startRect.height / 2;
-
       if (boss.currentAction === 'block') {
-        const availableIndices = gameState.cardData.map((_, i) => i).filter(i => i !== 12 && !gameState.boss.blockedCells.includes(i));
+        const availableIndices = gameState.cardData.map((_, i) => i).filter(i => i !== FREE_SPACE_INDEX && !gameState.boss.blockedCells.includes(i));
         if (availableIndices.length > 0) {
           const randomIdx = availableIndices[Math.floor(Math.random() * availableIndices.length)];
-          const endEl = document.querySelector(`[data-cell-index="${randomIdx}"]`);
-          if (endEl) {
-            const endRect = endEl.getBoundingClientRect();
-            triggerProjectile(startX, startY, endRect.left + endRect.width / 2, endRect.top + endRect.height / 2, "#ef4444", () => {
-              setGameState(prev => {
-                const newBlocked = [...prev.boss.blockedCells, randomIdx].slice(-BOSS_CONFIG.activeBoss.maxBlockedCells);
-                const newMarked = [...prev.markedCells];
-                newMarked[randomIdx] = false;
-                
-                setTimeout(() => {
-                  setBoss(curr => ({
-                    ...curr,
-                    blockedCells: curr.blockedCells.filter(id => id !== randomIdx)
-                  }));
-                }, BOSS_CONFIG.activeBoss.blockDurationMs);
-
-                return {
-                  ...prev,
-                  markedCells: newMarked,
-                  boss: { ...prev.boss, blockedCells: newBlocked }
-                };
-              });
-            });
-          }
-        }
-      } else if (boss.currentAction === 'remove-daub') {
-        const markedIndices = gameState.markedCells.map((m, i) => m ? i : -1).filter(i => i !== -1 && i !== 12);
-        if (markedIndices.length > 0) {
-          const randomIdx = markedIndices[Math.floor(Math.random() * markedIndices.length)];
-          const endEl = document.querySelector(`[data-cell-index="${randomIdx}"]`);
-          if (endEl) {
-            const endRect = endEl.getBoundingClientRect();
-            triggerProjectile(startX, startY, endRect.left + endRect.width / 2, endRect.top + endRect.height / 2, "#38bdf8", () => {
-              setGameState(prev => {
-                const newMarked = [...prev.markedCells];
-                newMarked[randomIdx] = false;
-                return { ...prev, markedCells: newMarked };
-              });
-            });
-          }
-        }
-      } else if (boss.currentAction === 'remove-points') {
-        const scoreEl = document.getElementById('score-display');
-        if (scoreEl) {
-          const rect = scoreEl.getBoundingClientRect();
-          const targetX = rect.left + rect.width / 2;
-          const targetY = rect.top + rect.height / 2;
-          triggerProjectile(startX, startY, targetX, targetY, "#f59e0b", () => {
+          fireBossProjectile(`[data-cell-index="${randomIdx}"]`, "#ef4444", () => {
             setGameState(prev => {
-              const loss = Math.floor(Math.random() * 50) + 20;
+              const newBlocked = [...prev.boss.blockedCells, randomIdx].slice(-BOSS_CONFIG.activeBoss.maxBlockedCells);
+              const newMarked = [...prev.markedCells];
+              newMarked[randomIdx] = false;
+              
+              setTimeout(() => {
+                setBoss(curr => ({
+                  ...curr,
+                  blockedCells: curr.blockedCells.filter(id => id !== randomIdx)
+                }));
+              }, BOSS_CONFIG.activeBoss.blockDurationMs);
+
               return {
                 ...prev,
-                currentScore: Math.max(0, prev.currentScore - loss)
+                markedCells: newMarked,
+                boss: { ...prev.boss, blockedCells: newBlocked }
               };
             });
           });
         }
+      } else if (boss.currentAction === 'remove-daub') {
+        const markedIndices = gameState.markedCells.map((m, i) => m ? i : -1).filter(i => i !== -1 && i !== FREE_SPACE_INDEX);
+        if (markedIndices.length > 0) {
+          const randomIdx = markedIndices[Math.floor(Math.random() * markedIndices.length)];
+          fireBossProjectile(`[data-cell-index="${randomIdx}"]`, "#38bdf8", () => {
+            setGameState(prev => {
+              const newMarked = [...prev.markedCells];
+              let scoreLoss = 0;
+              if (newMarked[randomIdx]) {
+                newMarked[randomIdx] = false;
+                const bonus = prev.bonusCells[randomIdx];
+                scoreLoss = bonus ? bonus.val : 20;
+              }
+              return { 
+                ...prev, 
+                markedCells: newMarked,
+                currentScore: Math.max(0, prev.currentScore - scoreLoss)
+              };
+            });
+          });
+        }
+      } else if (boss.currentAction === 'remove-points') {
+        fireBossProjectile('#score-display', "#f59e0b", () => {
+          setGameState(prev => {
+            const loss = Math.floor(Math.random() * 50) + 20;
+            return {
+              ...prev,
+              currentScore: Math.max(0, prev.currentScore - loss)
+            };
+          });
+        });
       } else if (boss.currentAction === 'scramble') {
-        const markedIndices = gameState.markedCells.map((m, i) => m ? i : -1).filter(i => i !== -1 && i !== 12);
+        const markedIndices = gameState.markedCells.map((m, i) => m ? i : -1).filter(i => i !== -1 && i !== FREE_SPACE_INDEX);
         if (markedIndices.length >= 2) {
           const targets = markedIndices.sort(() => 0.5 - Math.random()).slice(0, 2);
           targets.forEach(idx => {
-            const endEl = document.querySelector(`[data-cell-index="${idx}"]`);
-            if (endEl) {
-              const endRect = endEl.getBoundingClientRect();
-              triggerProjectile(startX, startY, endRect.left + endRect.width / 2, endRect.top + endRect.height / 2, "#a855f7", () => {
-                setGameState(prev => {
-                  const newMarked = [...prev.markedCells];
+            fireBossProjectile(`[data-cell-index="${idx}"]`, "#a855f7", () => {
+              setGameState(prev => {
+                const newMarked = [...prev.markedCells];
+                let scoreLoss = 0;
+                if (newMarked[idx]) {
                   newMarked[idx] = false;
-                  return { ...prev, markedCells: newMarked };
-                });
+                  const bonus = prev.bonusCells[idx];
+                  scoreLoss = bonus ? bonus.val : 20;
+                }
+                return { 
+                  ...prev, 
+                  markedCells: newMarked,
+                  currentScore: Math.max(0, prev.currentScore - scoreLoss)
+                };
               });
-            }
+            });
           });
         }
       }
@@ -117,7 +112,7 @@ export function useBingoGame() {
 
   const triggerChoice = useCallback(() => {
     setGameState(prev => {
-      if (prev.activeChoice) return prev;
+      if (prev.activeChoice || prev.boss.activeSpellId || prev.boss.type === 'active') return prev;
       const randomCasts = [...BOSS_CASTS].sort(() => 0.5 - Math.random()).slice(0, 4);
       marksSinceLastChoice.current = 0;
       return {
@@ -165,35 +160,7 @@ export function useBingoGame() {
   }, [gameState.settings.autoDraw, gameState.isGameOver, gameState.activeChoice, drawBall]);
 
   function initNewGame(): GameState {
-    const columns = BINGO_RANGES.map(([min, max]) => {
-      const s = new Set<number>();
-      while (s.size < 5) s.add(Math.floor(Math.random() * (max - min + 1)) + min);
-      return Array.from(s).sort((a, b) => a - b);
-    });
-
-    const cardData: (number | "FREE")[] = [];
-    const markedCells = Array(25).fill(false);
-    const bonusCells: (BonusCell | null)[] = Array(25).fill(null);
-
-    for (let r = 0; r < 5; r++) {
-      for (let c = 0; c < 5; c++) {
-        if (r === 2 && c === 2) {
-          cardData.push("FREE");
-          markedCells[12] = true;
-        } else {
-          cardData.push(columns[c][r]);
-        }
-      }
-    }
-
-    let b = 0;
-    while (b < 6) {
-      const i = Math.floor(Math.random() * 25);
-      if (i !== 12 && !bonusCells[i]) {
-        bonusCells[i] = { val: [50, 100, 150][Math.floor(Math.random() * 3)] };
-        b++;
-      }
-    }
+    const { cardData, markedCells, bonusCells } = generateBingoCard();
 
     marksSinceLastChoice.current = 0;
 
@@ -232,30 +199,38 @@ export function useBingoGame() {
   }, [resetBoss]);
 
   const applyCast = useCallback((cast: Cast) => {
-    applyBossEffect(cast);
-    
-    // Some casts affect player score too
-    if (cast.id === 'lucky-magnet') {
-      setGameState(prev => ({
-        ...prev,
-        currentScore: prev.currentScore + Math.floor(prev.boss.progress * 0.15),
-        activeChoice: null,
-        choiceTimer: 0
-      }));
-    } else if (cast.id === 'magic-mirror') {
-      setGameState(prev => ({
-        ...prev,
-        currentScore: prev.currentScore + Math.min(prev.boss.progress, 50),
-        activeChoice: null,
-        choiceTimer: 0
-      }));
-    } else {
-      setGameState(prev => ({
-        ...prev,
-        activeChoice: null,
-        choiceTimer: 0
-      }));
-    }
+    // Clear UI instantly
+    setGameState(prev => ({
+      ...prev,
+      activeChoice: null,
+      choiceTimer: 0
+    }));
+
+    // Derive a thematic color based on cast id
+    let color = "#eab308"; // default gold
+    if (cast.id === 'tea-break') color = "#d97706";
+    else if (cast.id === 'foggy-glasses') color = "#94a3b8";
+    else if (cast.id === 'lucky-magnet') color = "#ef4444";
+    else if (cast.id === 'soap-bubbles') color = "#38bdf8";
+    else if (cast.id === 'yarn-tangle') color = "#a855f7";
+    else if (cast.id === 'cookie-crumbs') color = "#f59e0b";
+
+    firePlayerProjectile(color, () => {
+      applyBossEffect(cast);
+      
+      // Some casts affect player score too, apply them on impact
+      if (cast.id === 'lucky-magnet') {
+        setGameState(prev => ({
+          ...prev,
+          currentScore: prev.currentScore + Math.floor(prev.boss.progress * 0.15)
+        }));
+      } else if (cast.id === 'magic-mirror') {
+        setGameState(prev => ({
+          ...prev,
+          currentScore: prev.currentScore + Math.min(prev.boss.progress, 50)
+        }));
+      }
+    });
   }, [applyBossEffect]);
 
   const rerollChoices = useCallback(() => {
@@ -311,18 +286,8 @@ export function useBingoGame() {
       const bonus = prev.bonusCells[index];
       const scoreGain = bonus ? bonus.val : 20;
 
-      const lines = [
-        [0, 1, 2, 3, 4], [5, 6, 7, 8, 9], [10, 11, 12, 13, 14], [15, 16, 17, 18, 19], [20, 21, 22, 23, 24],
-        [0, 5, 10, 15, 20], [1, 6, 11, 16, 21], [2, 7, 12, 17, 22], [3, 8, 13, 18, 23], [4, 9, 14, 19, 24],
-        [0, 6, 12, 18, 24], [4, 8, 12, 16, 20]
-      ];
-
       let bingoBonus = 0;
-      const justCompletedBingo = lines.some(line => {
-        const wasComplete = line.every(idx => prev.markedCells[idx]);
-        const isComplete = line.every(idx => newMarked[idx]);
-        return !wasComplete && isComplete;
-      });
+      const justCompletedBingo = checkJustCompletedBingo(prev.markedCells, newMarked);
 
       const totalGain = scoreGain + bingoBonus;
       const newScore = prev.currentScore + totalGain;

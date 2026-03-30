@@ -22,6 +22,7 @@ export function useBossLogic(isGameOver: boolean) {
   const actionTimerRef = useRef<NodeJS.Timeout | null>(null);
   const activeBossTimerRef = useRef<NodeJS.Timeout | null>(null);
   const reactionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const activeSpellTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const resetBoss = useCallback(() => {
     setBoss(prev => ({
@@ -35,20 +36,28 @@ export function useBossLogic(isGameOver: boolean) {
       currentAction: null,
       reaction: 'idle',
       blockedCells: [],
-      nextActionProgress: 0
+      nextActionProgress: 0,
+      activeSpellId: null
     }));
+    if (activeSpellTimeoutRef.current) clearTimeout(activeSpellTimeoutRef.current);
   }, []);
 
   const switchBossType = useCallback((type: BossState['type']) => {
-    setBoss(prev => ({
-      ...prev,
-      type,
-      progress: 0,
-      blockedCells: [],
-      nextActionProgress: 0,
-      message: type === 'active' ? "Let's play together! 😈" : "Try to beat my progress! 🐰",
-      reaction: 'evil'
-    }));
+    if (activeSpellTimeoutRef.current) clearTimeout(activeSpellTimeoutRef.current);
+    
+    setBoss(prev => {
+      if (prev.type === type) return prev;
+      return {
+        ...prev,
+        type,
+        activeSpellId: null,
+        isPaused: false,
+        isSlowed: false,
+        isBlurred: false,
+        message: type === 'active' ? "Let's play together! 😈" : "Try to beat my progress! 🐰",
+        reaction: 'evil'
+      };
+    });
   }, []);
 
   const setReaction = useCallback((reaction: BossState['reaction'], duration = 2000) => {
@@ -96,95 +105,70 @@ export function useBossLogic(isGameOver: boolean) {
   }, [isGameOver, boss.isPaused]);
 
   const applyBossEffect = useCallback((cast: Cast) => {
+    if (activeSpellTimeoutRef.current) clearTimeout(activeSpellTimeoutRef.current);
+
     setBoss(prev => {
-      let newBoss = { 
+      const cleanState = { 
         ...prev, 
+        isPaused: false, 
+        isSlowed: false, 
+        isBlurred: false 
+      };
+
+      let newBoss = { 
+        ...cleanState, 
         lastAction: cast.id, 
+        activeSpellId: cast.activeDurationMs ? cast.id : null,
         message: BOSS_MESSAGES.hit[Math.floor(Math.random() * BOSS_MESSAGES.hit.length)],
         reaction: 'angry' as const
       };
       
-      switch (cast.id) {
-        case 'tea-break':
-          newBoss.isPaused = true;
-          newBoss.reaction = 'sleeping';
-          newBoss.message = BOSS_MESSAGES.reaction.happy[Math.floor(Math.random() * BOSS_MESSAGES.reaction.happy.length)];
-          setTimeout(() => {
-            setBoss(curr => ({ ...curr, isPaused: false, message: BOSS_MESSAGES.idle[0], reaction: 'idle' }));
-          }, BOSS_CONFIG.pauseDurationMs);
-          break;
-        case 'foggy-glasses':
-          newBoss.isBlurred = true;
-          newBoss.reaction = 'confused';
-          newBoss.message = BOSS_MESSAGES.reaction.confused[Math.floor(Math.random() * BOSS_MESSAGES.reaction.confused.length)];
-          setTimeout(() => {
-            setBoss(curr => ({ ...curr, isBlurred: false, reaction: 'idle' }));
-          }, BOSS_CONFIG.blurDurationMs);
-          break;
-        case 'lucky-magnet':
-          const siphon = Math.floor(prev.progress * 0.15);
-          newBoss.progress = Math.max(0, prev.progress - siphon);
-          newBoss.reaction = 'scared';
-          newBoss.message = BOSS_MESSAGES.reaction.scared[Math.floor(Math.random() * BOSS_MESSAGES.reaction.scared.length)];
-          break;
-        case 'soap-bubbles':
-          newBoss.progress = 0;
-          newBoss.reaction = 'dizzy';
-          newBoss.message = BOSS_MESSAGES.reaction.dizzy[Math.floor(Math.random() * BOSS_MESSAGES.reaction.dizzy.length)];
-          break;
-        case 'yarn-tangle':
-          newBoss.progress = Math.max(0, prev.progress - BOSS_CONFIG.tanglePenalty);
-          newBoss.reaction = 'angry';
-          newBoss.message = BOSS_MESSAGES.hit[Math.floor(Math.random() * BOSS_MESSAGES.hit.length)];
-          break;
-        case 'golden-nap':
-          newBoss.isPaused = true;
-          newBoss.reaction = 'sleeping';
-          newBoss.message = BOSS_MESSAGES.reaction.happy[Math.floor(Math.random() * BOSS_MESSAGES.reaction.happy.length)];
-          setTimeout(() => {
-            setBoss(curr => ({ ...curr, isPaused: false, message: BOSS_MESSAGES.idle[0], reaction: 'idle' }));
-          }, BOSS_CONFIG.longPauseDurationMs);
-          break;
-        case 'cookie-crumbs':
-          newBoss.isSlowed = true;
-          newBoss.reaction = 'happy';
-          newBoss.message = BOSS_MESSAGES.reaction.happy[Math.floor(Math.random() * BOSS_MESSAGES.reaction.happy.length)];
-          setTimeout(() => {
-            setBoss(curr => ({ ...curr, isSlowed: false, reaction: 'idle' }));
-          }, BOSS_CONFIG.slowDurationMs);
-          break;
-        case 'magic-mirror':
-          newBoss.progress = Math.max(0, prev.progress - BOSS_CONFIG.swapAmount);
-          newBoss.reaction = 'evil';
-          newBoss.message = BOSS_MESSAGES.reaction.evil[Math.floor(Math.random() * BOSS_MESSAGES.reaction.evil.length)];
-          break;
+      if (cast.onExecute) {
+        newBoss = cast.onExecute(newBoss);
       }
       return newBoss;
     });
+
+    if (cast.activeDurationMs) {
+      activeSpellTimeoutRef.current = setTimeout(() => {
+        setBoss(curr => {
+          if (curr.activeSpellId !== cast.id) return curr;
+          return { 
+            ...curr, 
+            isPaused: false, 
+            isSlowed: false, 
+            isBlurred: false, 
+            activeSpellId: null, 
+            reaction: 'idle', 
+            message: BOSS_MESSAGES.idle[0] 
+          };
+        });
+      }, cast.activeDurationMs);
+    }
   }, []);
 
-  // Main tick for Goal Mode
+  // Main tick for Boss Progress
   useEffect(() => {
-    if (!isGameOver && !boss.isPaused && boss.type === 'goal') {
+    if (!isGameOver && !boss.isPaused) {
       bossTimerRef.current = setInterval(() => {
         setBoss(prev => {
-          if (prev.isPaused || isGameOver || prev.type !== 'goal') return prev;
+          if (prev.isPaused || isGameOver) return prev;
           
           let increment = BOSS_CONFIG.baseIncrement;
           if (prev.isBlurred) increment = BOSS_CONFIG.slowIncrement;
           if (prev.isSlowed) increment = Math.max(1, Math.floor(increment * BOSS_CONFIG.slowMultiplier));
 
-          const newProgress = prev.progress + increment;
+          const newProgress = Math.min(BOSS_CONFIG.maxProgress, prev.progress + increment);
           
           let newMessage = prev.message;
           let newReaction = prev.reaction;
 
-          if (newProgress % BOSS_CONFIG.tauntFrequency === 0) {
+          if (prev.type === 'goal' && newProgress % BOSS_CONFIG.tauntFrequency === 0) {
             newMessage = BOSS_MESSAGES.taunt[Math.floor(Math.random() * BOSS_MESSAGES.taunt.length)];
             newReaction = 'taunting';
           }
 
-          if (newProgress >= BOSS_CONFIG.maxProgress) {
+          if (prev.type === 'goal' && newProgress >= BOSS_CONFIG.maxProgress) {
             return { ...prev, progress: BOSS_CONFIG.maxProgress, message: BOSS_MESSAGES.win[0], reaction: 'happy' };
           }
 
@@ -197,7 +181,7 @@ export function useBossLogic(isGameOver: boolean) {
     return () => {
       if (bossTimerRef.current) clearInterval(bossTimerRef.current);
     };
-  }, [isGameOver, boss.isPaused, boss.isBlurred, boss.isSlowed, boss.type]);
+  }, [isGameOver, boss.isPaused, boss.isBlurred, boss.isSlowed]);
 
   // Active Boss Actions Effect (Granular for progress bar)
   useEffect(() => {

@@ -151,7 +151,7 @@ export const BingoBoard: React.FC<BingoBoardProps> = ({
                     transition-all duration-200 select-none relative
                     ${isBlocked ? 'opacity-40 cursor-not-allowed' : ''}
                     ${!isMarked && !isBlocked && canBeMarked && hintsEnabled
-                      ? 'ring-2 ring-yellow-400 ring-inset shadow-[inset_0_0_15px_rgba(253,224,71,0.4)] animate-pulse'
+                      ? 'ring-4 ring-green-400 ring-inset shadow-[0_0_20px_rgba(74,222,128,0.8),inset_0_0_15px_rgba(74,222,128,0.4)] animate-pulse z-10'
                       : ''}
                   `}
                   style={{

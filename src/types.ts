@@ -22,6 +22,8 @@ export interface Cast {
   description: string;
   icon: string;
   juice: string;
+  activeDurationMs?: number;
+  onExecute?: (boss: BossState) => BossState;
 }
 
 export type BossType = 'goal' | 'active';
@@ -38,6 +40,7 @@ export interface BossState {
   reaction: 'idle' | 'happy' | 'angry' | 'surprised' | 'sleeping' | 'focused' | 'taunting' | 'scared' | 'confused' | 'evil' | 'dizzy';
   blockedCells: number[]; // Indices of blocked cells
   nextActionProgress: number; // 0 to 100 for Active mode
+  activeSpellId?: string | null;
 }
 
 export interface Projectile {

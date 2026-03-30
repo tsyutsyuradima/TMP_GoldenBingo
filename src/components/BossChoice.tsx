@@ -1,10 +1,11 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Cast } from '../types';
+import { Cast, BossState } from '../types';
 
 interface BossChoiceProps {
   casts: Cast[] | null;
   timer: number;
+  boss: BossState;
   onSelect: (cast: Cast) => void;
   onReroll: () => void;
   canReroll: boolean;
@@ -16,15 +17,26 @@ export const BossChoice: React.FC<BossChoiceProps> = ({
   onSelect,
   onReroll,
   canReroll,
+  boss,
 }) => {
+  const isSpellActive = !!boss.activeSpellId;
   return (
     <AnimatePresence>
       {casts && (
-        <motion.div
+        <>
+          {/* Localized Screen Flash */}
+          <motion.div
+            initial={{ opacity: 0.4 }}
+            animate={{ opacity: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.5 }}
+            className="absolute inset-0 bg-white z-[100] pointer-events-none rounded-2xl"
+          />
+          <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-slate-900/95 backdrop-blur-md z-[80] flex items-center justify-center p-4"
+          className="absolute inset-0 rounded-2xl bg-slate-900/95 backdrop-blur-md z-[80] flex items-center justify-center p-4 sm:p-5"
         >
           <motion.div
             initial={{ scale: 0.9, y: 30 }}
@@ -76,16 +88,23 @@ export const BossChoice: React.FC<BossChoiceProps> = ({
 
             {/* Spell Buttons */}
             <div className="flex flex-col gap-2.5">
-              {casts.map((cast, i) => (
+              {casts.map((cast, i) => {
+                const isBlocked = isSpellActive && !!cast.activeDurationMs;
+                return (
                 <motion.button
                   key={cast.id}
                   initial={{ x: 30, opacity: 0 }}
                   animate={{ x: 0, opacity: 1 }}
                   transition={{ delay: i * 0.08, type: "spring", stiffness: 300, damping: 20 }}
-                  whileHover={{ scale: 1.03, x: 8, backgroundColor: "rgba(255, 255, 255, 0.15)" }}
-                  whileTap={{ scale: 0.97 }}
-                  onClick={() => onSelect(cast)}
-                  className="bg-white/5 hover:bg-white/10 border border-white/10 p-3.5 rounded-2xl flex items-center gap-4 text-left transition-all group relative overflow-hidden"
+                  whileHover={isBlocked ? {} : { scale: 1.03, x: 8, backgroundColor: "rgba(255, 255, 255, 0.15)" }}
+                  whileTap={isBlocked ? {} : { scale: 0.97 }}
+                  onClick={() => { if (!isBlocked) onSelect(cast); }}
+                  disabled={isBlocked}
+                  className={`border p-3.5 rounded-2xl flex items-center gap-4 text-left transition-all group relative overflow-hidden ${
+                    isBlocked 
+                      ? 'bg-slate-800/50 border-slate-700/50 opacity-40 cursor-not-allowed'
+                      : 'bg-white/5 hover:bg-white/10 border-white/10 cursor-pointer'
+                  }`}
                 >
                   <div className="absolute inset-0 bg-gradient-to-r from-amber-400/0 via-amber-400/5 to-amber-400/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
                   <span className="text-4xl group-hover:scale-125 transition-transform drop-shadow-lg">{cast.icon}</span>
@@ -97,12 +116,17 @@ export const BossChoice: React.FC<BossChoiceProps> = ({
                     <span className="text-[10px]">✨</span>
                   </div>
                 </motion.button>
-              ))}
+              )})}
             </div>
 
-            <p className="text-[7px] font-black text-slate-500 uppercase tracking-[0.2em] mt-4 text-center">Game paused for player</p>
+            {isSpellActive ? (
+              <p className="text-[7px] font-black text-amber-500 uppercase tracking-[0.2em] mt-4 text-center animate-pulse">Waiting for active spell to clear...</p>
+            ) : (
+              <p className="text-[7px] font-black text-slate-500 uppercase tracking-[0.2em] mt-4 text-center">Game paused for player</p>
+            )}
           </motion.div>
-        </motion.div>
+          </motion.div>
+        </>
       )}
     </AnimatePresence>
   );

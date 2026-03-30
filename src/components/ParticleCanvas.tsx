@@ -69,6 +69,12 @@ export const ParticleCanvas: React.FC = () => {
         const distance = Math.sqrt(dx * dx + dy * dy);
 
         if (distance < p.speed) {
+          // Impact Explosion!
+          const impactCount = 40 + Math.random() * 20; // Huge explosion
+          window.dispatchEvent(new CustomEvent('bingo-explosion', { 
+            detail: { x: p.targetX, y: p.targetY, color: p.color, count: impactCount, power: 1.5 } 
+          }));
+
           if (p.onComplete) p.onComplete();
           return false;
         }
@@ -83,18 +89,18 @@ export const ParticleCanvas: React.FC = () => {
         ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
         ctx.fill();
 
-        // Add trail particles
-        if (Math.random() > 0.5) {
+        // Add trailing exhaust particles (rocket thrust)
+        if (Math.random() > 0.2) {
           particlesRef.current.push({
-            x: p.x,
-            y: p.y,
-            color: p.color,
-            size: p.size * 0.6,
-            speedX: (Math.random() - 0.5) * 2,
-            speedY: (Math.random() - 0.5) * 2,
-            gravity: 0.05,
-            life: 0.5,
-            decay: 0.02
+            x: p.x - Math.cos(angle) * (p.size + 2), // Spawn behind the rocket
+            y: p.y - Math.sin(angle) * (p.size + 2),
+            color: p.color === '#a855f7' ? (Math.random() > 0.5 ? '#e879f9' : '#fff') : p.color, // Add some heat variation
+            size: p.size * (0.4 + Math.random() * 0.4),
+            speedX: -Math.cos(angle) * (1 + Math.random() * 3) + (Math.random() - 0.5) * 2, // Blast backwards
+            speedY: -Math.sin(angle) * (1 + Math.random() * 3) + (Math.random() - 0.5) * 2,
+            gravity: 0.1,
+            life: 0.8,
+            decay: 0.03 + Math.random() * 0.02
           });
         }
 
@@ -115,16 +121,35 @@ export const ParticleCanvas: React.FC = () => {
   // Listen for custom events
   useEffect(() => {
     const handleExplosion = (e: any) => {
-      const { x, y, color, count = 20 } = e.detail;
+      const { x, y, color, count = 20, power = 1 } = e.detail;
+      
+      // Core flash (white/yellowish sparks)
+      for (let i = 0; i < count * 0.4; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 20 * power + 5;
+        particlesRef.current.push({
+          x, y, color: '#ffffff',
+          size: Math.random() * 3 + 1,
+          speedX: Math.cos(angle) * speed,
+          speedY: Math.sin(angle) * speed,
+          gravity: 0.1,
+          life: 1.0,
+          decay: Math.random() * 0.05 + 0.04, // Very fast decay
+        });
+      }
+
+      // Main colored debris
       for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 12 * power;
         particlesRef.current.push({
           x, y, color,
-          size: Math.random() * 4 + 2,
-          speedX: (Math.random() - 0.5) * 12,
-          speedY: (Math.random() - 0.5) * 12,
-          gravity: 0.25,
+          size: Math.random() * 6 + 3,
+          speedX: Math.cos(angle) * speed,
+          speedY: Math.sin(angle) * speed,
+          gravity: 0.3, // Heavier
           life: 1.0,
-          decay: Math.random() * 0.02 + 0.015,
+          decay: Math.random() * 0.02 + 0.01,
         });
       }
     };
@@ -159,10 +184,13 @@ export const ParticleCanvas: React.FC = () => {
   );
 };
 
-export const triggerExplosion = (x: number, y: number, color: string, count?: number) => {
-  window.dispatchEvent(new CustomEvent('bingo-explosion', { detail: { x, y, color, count } }));
+export const triggerExplosion = (x: number, y: number, color: string, count?: number, power?: number) => {
+  window.dispatchEvent(new CustomEvent('bingo-explosion', { detail: { x, y, color, count, power } }));
 };
 
 export const triggerProjectile = (startX: number, startY: number, targetX: number, targetY: number, color: string, onComplete?: () => void) => {
+  // Liftoff explosion
+  triggerExplosion(startX, startY, color, 15, 0.5);
+  
   window.dispatchEvent(new CustomEvent('bingo-projectile', { detail: { startX, startY, targetX, targetY, color, onComplete } }));
 };
