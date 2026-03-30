@@ -1,15 +1,16 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { TARGET_SCORE } from '../constants';
-import { Milestone } from '../types';
+import { Milestone, BossState } from '../types';
 
 interface ScoreAttackProps {
   currentScore: number;
   milestones: Milestone[];
   onCollect: (score: number) => void;
+  boss: BossState;
 }
 
-const MilestonePopup: React.FC<{ milestone: Milestone; onCollect: (score: number) => void }> = ({ milestone, onCollect }) => {
+const MilestoneNotification: React.FC<{ milestone: Milestone; onCollect: (score: number) => void }> = ({ milestone, onCollect }) => {
   React.useEffect(() => {
     const timer = setTimeout(() => {
       onCollect(milestone.score);
@@ -19,13 +20,13 @@ const MilestonePopup: React.FC<{ milestone: Milestone; onCollect: (score: number
 
   return (
     <motion.button
-      initial={{ scale: 0, x: '-50%' }}
-      animate={{ scale: 1, x: '-50%' }}
-      exit={{ scale: 0, x: '-50%' }}
-      whileHover={{ scale: 1.1, x: '-50%' }}
-      whileTap={{ scale: 0.9, x: '-50%' }}
+      initial={{ scale: 0, y: 20 }}
+      animate={{ scale: 1, y: 0 }}
+      exit={{ scale: 0, y: -20 }}
+      whileHover={{ scale: 1.05 }}
+      whileTap={{ scale: 0.95 }}
       onClick={() => onCollect(milestone.score)}
-      className="absolute -top-16 left-1/2 bg-slate-900 border-2 border-amber-400 text-white px-4 py-2 rounded-xl text-[10px] font-black whitespace-nowrap shadow-xl z-40"
+      className="bg-gradient-to-r from-amber-500 to-yellow-500 text-white px-5 py-2 rounded-full text-sm font-black shadow-lg border-2 border-amber-300"
     >
       COLLECT {milestone.reward} 🪙
       <div className="w-full h-1 bg-white/20 mt-1 rounded-full overflow-hidden">
@@ -33,7 +34,7 @@ const MilestonePopup: React.FC<{ milestone: Milestone; onCollect: (score: number
           initial={{ width: '100%' }}
           animate={{ width: 0 }}
           transition={{ duration: 4, ease: "linear" }}
-          className="h-full bg-amber-400"
+          className="h-full bg-white/60"
         />
       </div>
     </motion.button>
@@ -44,83 +45,91 @@ export const ScoreAttack: React.FC<ScoreAttackProps> = ({
   currentScore,
   milestones,
   onCollect,
+  boss,
 }) => {
+  const playerLeading = currentScore >= boss.progress;
   const percent = Math.min((currentScore / TARGET_SCORE) * 100, 100);
-  const [hoveredMilestone, setHoveredMilestone] = useState<number | null>(null);
 
   return (
-    <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100 flex items-center gap-10">
-      <div className="flex-1">
-        <div className="flex justify-between items-end mb-4 px-2">
-          <div className="space-y-0.5">
-            <div className="flex items-center gap-2">
-              <span className="flex h-3 w-3 relative">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
-              </span>
-              <span className="text-sm font-black text-slate-900 uppercase tracking-tighter italic">Score Attack Challenge</span>
+    <div className="w-full flex flex-col items-center gap-2">
+      {/* VS Score Bar */}
+      <div className="w-full bg-slate-800/90 backdrop-blur-sm rounded-2xl px-4 sm:px-6 py-3 flex items-center justify-between shadow-xl border border-white/10">
+        {/* Player Side */}
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            {playerLeading && (
+              <span className="absolute -top-3 left-1/2 -translate-x-1/2 text-sm">👑</span>
+            )}
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-lg shadow-md border-2 border-blue-300/50">
+              👤
             </div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Get {TARGET_SCORE} for a Super Reward</p>
           </div>
-          <span id="score-display" className="text-3xl font-black text-slate-900 tracking-tighter tabular-nums">
-            {currentScore}<span className="text-slate-200 text-xl mx-0.5">/</span><span className="text-slate-400 text-xl">{TARGET_SCORE}</span>
-          </span>
+          <div className="flex flex-col">
+            <span className="text-white font-black text-xl sm:text-2xl tabular-nums leading-none">
+              {currentScore.toLocaleString()}
+            </span>
+            <span className="text-[8px] text-slate-400 font-bold uppercase tracking-widest">You</span>
+          </div>
         </div>
 
-        <div className="relative h-9 bg-slate-100 rounded-full p-1 border-2 border-slate-200 shadow-inner flex items-center">
-          <motion.div
-            initial={{ width: 0 }}
-            animate={{ width: `${percent}%` }}
-            className="h-full rounded-full bg-gradient-to-r from-amber-400 via-orange-500 to-red-500 shadow-[0_6px_15px_rgba(245,158,11,0.2)]"
-          />
-
-          {milestones.map((m, i) => {
-            const pos = (m.score / TARGET_SCORE) * 100;
-            return (
-              <div
-                key={i}
-                className="absolute top-1/2 -translate-y-1/2"
-                style={{ left: `${pos}%` }}
-              >
+        {/* Score Progress Bar */}
+        <div className="flex-1 mx-4 sm:mx-8">
+          <div className="relative h-3 bg-slate-700 rounded-full overflow-hidden border border-slate-600">
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${percent}%` }}
+              className="h-full bg-gradient-to-r from-amber-400 via-orange-500 to-red-500 rounded-full"
+            />
+            {/* Milestone markers */}
+            {milestones.map((m, i) => {
+              const pos = (m.score / TARGET_SCORE) * 100;
+              return (
                 <div
-                  className={`relative cursor-pointer transition-all duration-300 ${m.reached ? 'grayscale-0 scale-125 opacity-100' : 'grayscale opacity-50'}`}
-                  onMouseEnter={() => setHoveredMilestone(m.score)}
-                  onMouseLeave={() => setHoveredMilestone(null)}
+                  key={i}
+                  className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2"
+                  style={{ left: `${pos}%` }}
                 >
-                  <span className="text-xl">🎁</span>
-                  
-                  <AnimatePresence>
-                    {hoveredMilestone === m.score && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 10, x: '-50%' }}
-                        animate={{ opacity: 1, y: 0, x: '-50%' }}
-                        exit={{ opacity: 0, y: -10, x: '-50%' }}
-                        className="absolute bottom-full mb-2 left-1/2 bg-slate-900 text-white px-3 py-1.5 rounded-xl text-[10px] font-black whitespace-nowrap z-50"
-                      >
-                        REWARD: {m.reward.toLocaleString()} 🪙
-                        <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-slate-900" />
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+                  <span className={`text-xs ${m.reached ? 'grayscale-0 opacity-100' : 'grayscale opacity-40'}`}>🎁</span>
                 </div>
+              );
+            })}
+          </div>
+          <div className="flex justify-between mt-0.5 px-0.5">
+            <span className="text-[7px] text-slate-500 font-bold">0</span>
+            <span className="text-[7px] text-amber-400 font-black">{TARGET_SCORE}</span>
+          </div>
+        </div>
 
-                <AnimatePresence>
-                  {m.reached && !m.collected && (
-                    <MilestonePopup milestone={m} onCollect={onCollect} />
-                  )}
-                </AnimatePresence>
-              </div>
-            );
-          })}
+        {/* VS */}
+        <span className="text-slate-500 font-black text-xs uppercase tracking-widest mx-1">vs</span>
+
+        {/* Boss Side */}
+        <div className="flex items-center gap-3">
+          <div className="flex flex-col items-end">
+            <span className="text-white font-black text-xl sm:text-2xl tabular-nums leading-none">
+              {boss.progress.toLocaleString()}
+            </span>
+            <span className="text-[8px] text-slate-400 font-bold uppercase tracking-widest">Binky</span>
+          </div>
+          <div className="relative">
+            {!playerLeading && (
+              <span className="absolute -top-3 left-1/2 -translate-x-1/2 text-sm">👑</span>
+            )}
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center text-lg shadow-md border-2 border-purple-300/50">
+              🐰
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="w-24 h-24 bg-slate-50 rounded-3xl border border-slate-100 shadow-inner flex flex-col items-center justify-center relative shrink-0">
-        <span className="text-5xl select-none">🧰</span>
-        <div className="absolute -bottom-2 bg-slate-900 text-amber-400 px-2 py-0.5 rounded-full text-[10px] font-black border border-amber-400">
-          10,000 🪙
-        </div>
-      </div>
+      {/* Milestone Notifications */}
+      <AnimatePresence>
+        {milestones.map((m, i) =>
+          m.reached && !m.collected ? (
+            <MilestoneNotification key={i} milestone={m} onCollect={onCollect} />
+          ) : null
+        )}
+      </AnimatePresence>
     </div>
   );
 };

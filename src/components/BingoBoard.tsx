@@ -3,6 +3,17 @@ import { motion, AnimatePresence } from 'motion/react';
 import { BINGO_LETTERS, BINGO_COLORS } from '../constants';
 import { triggerExplosion } from './ParticleCanvas';
 
+const HEADER_COLORS: Record<string, string> = {
+  B: '#1e40af',
+  I: '#a21caf',
+  N: '#15803d',
+  G: '#16a34a',
+  O: '#dc2626',
+};
+
+const CELL_DARK = '#d4a574';
+const CELL_LIGHT = '#f5e6d0';
+
 interface BingoBoardProps {
   cardData: (number | "FREE")[];
   markedCells: boolean[];
@@ -30,6 +41,7 @@ export const BingoBoard: React.FC<BingoBoardProps> = ({
 }) => {
   const [showBingo, setShowBingo] = React.useState(false);
   const boardRef = React.useRef<HTMLDivElement>(null);
+  const ballsToGo = 75 - drawnBalls.length;
 
   React.useEffect(() => {
     if (lastBingoTime > 0) {
@@ -40,121 +52,156 @@ export const BingoBoard: React.FC<BingoBoardProps> = ({
   }, [lastBingoTime]);
 
   return (
-    <div ref={boardRef} className="bg-white p-5 rounded-[3.5rem] shadow-2xl border-4 border-white flex-1 relative overflow-hidden">
-      <AnimatePresence>
-        {isPaused && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-slate-900/60 backdrop-blur-[3px] z-50 flex items-center justify-center p-8 text-center"
-          >
-            <motion.div
-              initial={{ scale: 0.8, y: 20 }}
-              animate={{ 
-                scale: [1, 1.02, 1],
-                y: 0 
-              }}
-              transition={{
-                scale: { repeat: Infinity, duration: 2, ease: "easeInOut" }
-              }}
-              className="bg-white p-8 rounded-[3rem] shadow-[0_20px_50px_rgba(0,0,0,0.3)] border-4 border-amber-400 relative overflow-hidden"
-            >
-              <div className="absolute top-0 left-0 w-full h-1.5 bg-amber-400 animate-pulse" />
-              <motion.span 
-                animate={{ rotate: [0, 10, -10, 0] }}
-                transition={{ repeat: Infinity, duration: 2 }}
-                className="text-6xl mb-4 block"
+    <div ref={boardRef} className="relative w-full max-w-md mx-auto">
+      {/* Golden Card Frame */}
+      <div className="bg-gradient-to-b from-amber-400 via-amber-500 to-amber-600 p-2.5 sm:p-3 rounded-2xl shadow-[0_8px_32px_rgba(180,83,9,0.35)]">
+        <div className="bg-amber-100/90 rounded-xl overflow-hidden relative">
+          {/* Pause Overlay */}
+          <AnimatePresence>
+            {isPaused && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center"
               >
-                ⏸️
-              </motion.span>
-              <h3 className="text-3xl font-black text-slate-900 italic uppercase leading-none tracking-tighter">Game Paused</h3>
-              <p className="text-[10px] font-bold text-amber-600 uppercase tracking-[0.3em] mt-3 animate-pulse">Binky is making a choice!</p>
-              
-              <div className="mt-6 flex gap-1 justify-center">
-                {[...Array(3)].map((_, i) => (
-                  <motion.div
-                    key={i}
-                    animate={{ scale: [1, 1.5, 1], opacity: [0.3, 1, 0.3] }}
-                    transition={{ repeat: Infinity, duration: 1, delay: i * 0.2 }}
-                    className="w-2 h-2 rounded-full bg-amber-400"
-                  />
-                ))}
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+                <motion.div
+                  initial={{ scale: 0.8 }}
+                  animate={{ scale: [1, 1.03, 1] }}
+                  transition={{ repeat: Infinity, duration: 2 }}
+                  className="text-center"
+                >
+                  <motion.span
+                    animate={{ rotate: [0, 10, -10, 0] }}
+                    transition={{ repeat: Infinity, duration: 2 }}
+                    className="text-5xl block mb-3"
+                  >
+                    ⏸️
+                  </motion.span>
+                  <h3 className="text-xl font-black text-white uppercase tracking-tight">Paused</h3>
+                  <p className="text-[10px] text-amber-400 font-bold uppercase tracking-widest animate-pulse mt-1">Choose a spell!</p>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-      <AnimatePresence>
-        {showBingo && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.5, rotate: -10 }}
-            animate={{ opacity: 1, scale: 1.2, rotate: 0 }}
-            exit={{ opacity: 0, scale: 2, rotate: 10 }}
-            className="absolute inset-0 z-[60] flex items-center justify-center pointer-events-none"
-          >
-            <div className="bg-gradient-to-br from-yellow-400 via-amber-500 to-orange-600 text-white px-12 py-6 rounded-full shadow-[0_0_50px_rgba(245,158,11,0.6)] border-4 border-white transform -rotate-3">
-              <h2 className="text-7xl font-black italic uppercase tracking-tighter drop-shadow-2xl">BINGO!</h2>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <div className="grid grid-cols-5 text-center font-black text-4xl py-4 italic mb-2">
-        {BINGO_LETTERS.map((letter, i) => (
-          <div key={i} style={{ color: BINGO_COLORS[letter.toLowerCase()] }}>
-            {letter}
-          </div>
-        ))}
-      </div>
-      <div className="grid grid-cols-5 gap-2 p-4 bg-slate-50 rounded-[2.5rem]">
-        {cardData.map((val, i) => {
-          const letter = BINGO_LETTERS[i % 5];
-          const isMarked = markedCells[i];
-          const isBlocked = blockedCells.includes(i);
-          const canBeMarked = !isBlocked && (val === "FREE" || drawnBalls.includes(val as number));
-          const bonus = bonusCells[i];
-
-          return (
-            <motion.div
-              key={i}
-              data-cell-index={i}
-              whileHover={!isMarked && !isGameOver && !isBlocked ? { scale: 1.05 } : {}}
-              whileTap={!isMarked && !isGameOver && !isBlocked ? { scale: 0.95 } : {}}
-              onClick={(e) => {
-                if (isGameOver || isMarked || isBlocked) return;
-                if (canBeMarked) {
-                  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                  triggerExplosion(
-                    rect.left + rect.width / 2,
-                    rect.top + rect.height / 2,
-                    bonus ? "#fbbf24" : "#cbd5e1",
-                    15
-                  );
-                  onMarkCell(i);
-                }
-              }}
-              className={`
-                bingo-cell aspect-square flex items-center justify-center font-bold rounded-xl cursor-pointer transition-all duration-200 text-xl select-none relative
-                ${isMarked ? 'text-white shadow-md' : 'bg-white border-2 border-slate-100'}
-                ${isBlocked ? 'bg-slate-200 border-slate-300 opacity-50 cursor-not-allowed' : ''}
-                ${!isMarked && !isBlocked && canBeMarked && hintsEnabled ? 'bg-yellow-50 border-yellow-300 shadow-[0_0_15px_rgba(253,224,71,0.5)] animate-pulse' : ''}
-              `}
-              style={{
-                backgroundColor: isMarked ? BINGO_COLORS[letter.toLowerCase()] : undefined,
-                transform: isMarked ? 'scale(0.92)' : undefined,
-              }}
-            >
-              {isBlocked ? "🚫" : (val === "FREE" ? "⭐" : val)}
-              {bonus && !isMarked && !isBlocked && (
-                <div className="absolute -top-1 -right-1 text-[10px] px-1.5 py-0.5 rounded-md font-black bg-gradient-to-br from-amber-600 to-yellow-400 text-amber-950 animate-bounce">
-                  +{bonus.val}
+          {/* BINGO! Banner */}
+          <AnimatePresence>
+            {showBingo && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.5, rotate: -10 }}
+                animate={{ opacity: 1, scale: 1.1, rotate: 0 }}
+                exit={{ opacity: 0, scale: 2 }}
+                className="absolute inset-0 z-[60] flex items-center justify-center pointer-events-none"
+              >
+                <div className="bg-gradient-to-br from-yellow-400 via-amber-500 to-orange-600 text-white px-10 py-4 rounded-full shadow-[0_0_40px_rgba(245,158,11,0.6)] border-4 border-white -rotate-3">
+                  <h2 className="text-5xl font-black italic uppercase tracking-tighter drop-shadow-2xl">BINGO!</h2>
                 </div>
-              )}
-            </motion.div>
-          );
-        })}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* BINGO Header Row */}
+          <div className="grid grid-cols-5 gap-1 px-2 pt-2 pb-1">
+            {BINGO_LETTERS.map((letter) => (
+              <div
+                key={letter}
+                className="flex items-center justify-center py-2 rounded-md font-black text-white text-base sm:text-lg shadow-sm"
+                style={{ backgroundColor: HEADER_COLORS[letter] }}
+              >
+                {letter}
+              </div>
+            ))}
+          </div>
+
+          {/* 5x5 Checkerboard Grid */}
+          <div className="grid grid-cols-5 gap-[2px] p-2 pt-1">
+            {cardData.map((val, i) => {
+              const row = Math.floor(i / 5);
+              const col = i % 5;
+              const isDark = (row + col) % 2 === 0;
+              const letter = BINGO_LETTERS[col];
+              const isMarked = markedCells[i];
+              const isBlocked = blockedCells.includes(i);
+              const canBeMarked = !isBlocked && (val === "FREE" || drawnBalls.includes(val as number));
+              const bonus = bonusCells[i];
+              const isFree = val === "FREE";
+
+              return (
+                <motion.div
+                  key={i}
+                  data-cell-index={i}
+                  whileHover={!isMarked && !isGameOver && !isBlocked ? { scale: 1.06 } : {}}
+                  whileTap={!isMarked && !isGameOver && !isBlocked ? { scale: 0.94 } : {}}
+                  onClick={(e) => {
+                    if (isGameOver || isMarked || isBlocked) return;
+                    if (canBeMarked) {
+                      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                      triggerExplosion(
+                        rect.left + rect.width / 2,
+                        rect.top + rect.height / 2,
+                        bonus ? "#fbbf24" : BINGO_COLORS[letter.toLowerCase()],
+                        15
+                      );
+                      onMarkCell(i);
+                    }
+                  }}
+                  className={`
+                    aspect-square flex items-center justify-center font-bold rounded-md cursor-pointer
+                    transition-all duration-200 select-none relative
+                    ${isBlocked ? 'opacity-40 cursor-not-allowed' : ''}
+                    ${!isMarked && !isBlocked && canBeMarked && hintsEnabled
+                      ? 'ring-2 ring-yellow-400 ring-inset shadow-[inset_0_0_15px_rgba(253,224,71,0.4)] animate-pulse'
+                      : ''}
+                  `}
+                  style={{
+                    backgroundColor: (!isMarked && !isFree) ? (isDark ? CELL_DARK : CELL_LIGHT) : (isDark ? CELL_DARK : CELL_LIGHT),
+                  }}
+                >
+                  {isBlocked ? (
+                    <span className="text-xl sm:text-2xl">🚫</span>
+                  ) : isMarked || isFree ? (
+                    /* Glossy chip */
+                    <div
+                      className="w-[75%] h-[75%] rounded-full flex items-center justify-center"
+                      style={{
+                        background: isFree && !isMarked
+                          ? 'radial-gradient(circle at 38% 32%, #86efac, #22c55e 50%, #15803d)'
+                          : `radial-gradient(circle at 38% 32%, ${BINGO_COLORS[letter.toLowerCase()]}99, ${BINGO_COLORS[letter.toLowerCase()]} 50%, ${BINGO_COLORS[letter.toLowerCase()]}dd)`,
+                        boxShadow: 'inset 0 2px 6px rgba(255,255,255,0.35), inset 0 -2px 4px rgba(0,0,0,0.15), 0 3px 6px rgba(0,0,0,0.2)',
+                      }}
+                    >
+                      {isFree && !isMarked && (
+                        <span className="text-white text-[10px] sm:text-xs font-black drop-shadow-sm">FREE</span>
+                      )}
+                      {isMarked && (
+                        <span className="text-white/90 text-xs sm:text-sm font-black drop-shadow-sm">{val === "FREE" ? "★" : val}</span>
+                      )}
+                    </div>
+                  ) : (
+                    <span className={`text-sm sm:text-base font-bold ${isDark ? 'text-[#8b6242]' : 'text-[#b08860]'}`}>
+                      {val}
+                    </span>
+                  )}
+
+                  {/* Bonus badge */}
+                  {bonus && !isMarked && !isBlocked && (
+                    <div className="absolute -top-0.5 -right-0.5 text-[8px] px-1 py-0.5 rounded font-black bg-gradient-to-br from-amber-500 to-yellow-400 text-white shadow-sm animate-bounce z-10 leading-none">
+                      +{bonus.val}
+                    </div>
+                  )}
+                </motion.div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Balls to go counter */}
+      <div className="flex justify-center mt-2.5">
+        <div className="bg-white/90 backdrop-blur-sm px-6 py-2 rounded-full shadow-lg border border-white/50">
+          <span className="text-sm font-black text-slate-700">{ballsToGo} balls to go</span>
+        </div>
       </div>
     </div>
   );
