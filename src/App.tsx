@@ -21,9 +21,8 @@ export default function App() {
     updateSettings,
     resetGame,
     collectMilestone,
-    applyCast,
-    rerollChoices,
-    switchBossType,
+    triggerBossAction,
+    triggerPlayerAction,
   } = useBingoGame();
 
   const {
@@ -36,8 +35,6 @@ export default function App() {
     settings,
     milestones,
     boss,
-    activeChoice,
-    choiceTimer,
   } = gameState;
 
   return (
@@ -60,13 +57,12 @@ export default function App() {
           isGameOver={isGameOver}
         />
 
-        {/* VS SCORE BAR */}
+        {/* SCORE BAR */}
         <div className="mt-3">
           <ScoreAttack
             currentScore={currentScore}
             milestones={milestones}
             onCollect={collectMilestone}
-            boss={boss}
           />
         </div>
 
@@ -80,6 +76,31 @@ export default function App() {
                 <span className="text-[10px] font-black uppercase text-slate-700 tracking-widest">Round Log</span>
                 <span className="text-[10px] font-bold text-white bg-slate-800/70 px-2.5 py-0.5 rounded-full">{drawnBalls.length} / 75</span>
               </div>
+
+              {/* Draw Controls */}
+              <div className="mb-3">
+                {!settings.autoDraw ? (
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={drawBall}
+                    disabled={isGameOver}
+                    className="w-full bg-gradient-to-b from-red-500 to-red-700 hover:from-red-600 hover:to-red-800 text-white font-black py-3 rounded-2xl shadow-[0_4px_16px_rgba(220,38,38,0.4)] text-base uppercase tracking-tight disabled:opacity-50 transition-all border-2 border-red-400/50"
+                  >
+                    Draw Ball
+                  </motion.button>
+                ) : (
+                  <div className="flex items-center justify-center gap-2 bg-white/60 backdrop-blur-sm px-5 py-2.5 rounded-2xl shadow-md">
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ repeat: Infinity, duration: 2, ease: "linear" }}
+                      className="w-5 h-5 rounded-full border-[3px] border-blue-500 border-t-transparent"
+                    />
+                    <span className="text-sm font-bold text-slate-600">Auto-Drawing...</span>
+                  </div>
+                )}
+              </div>
+
               <div className="flex flex-wrap gap-2 max-h-[420px] overflow-y-auto pr-1">
                 {drawnBalls.map((b, i) => {
                   const l = "BINGO"[Math.floor((b - 1) / 15)];
@@ -97,7 +118,7 @@ export default function App() {
                       {isLatest && (
                         <motion.div
                           animate={{ scale: [1, 1.5, 1], opacity: [0.5, 0, 0.5] }}
-                          transition={{ repeat: Infinity, duration: 1 }}
+                          transition={{ repeat: Infinity, duration: 1, type: "tween" }}
                           className="absolute inset-0 rounded-full bg-white/30"
                         />
                       )}
@@ -110,35 +131,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Draw Controls under Round Log */}
-            <div className="flex flex-col items-center gap-3 mt-4">
-              {!settings.autoDraw ? (
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={drawBall}
-                  disabled={isGameOver || !!activeChoice}
-                  className="w-full bg-gradient-to-b from-red-500 to-red-700 hover:from-red-600 hover:to-red-800 text-white font-black py-3.5 rounded-2xl shadow-[0_4px_16px_rgba(220,38,38,0.4)] text-base uppercase tracking-tight disabled:opacity-50 transition-all border-2 border-red-400/50"
-                >
-                  Draw Ball
-                </motion.button>
-              ) : (
-                <div className="flex items-center gap-2 bg-white/60 backdrop-blur-sm px-5 py-2.5 rounded-full shadow-md">
-                  <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ repeat: Infinity, duration: 2, ease: "linear" }}
-                    className="w-5 h-5 rounded-full border-[3px] border-blue-500 border-t-transparent"
-                  />
-                  <span className="text-sm font-bold text-slate-600">Auto-Drawing...</span>
-                </div>
-              )}
-              <button
-                onClick={resetGame}
-                className="text-[10px] font-bold text-slate-500 hover:text-red-600 transition uppercase tracking-widest"
-              >
-                Reset Progress
-              </button>
-            </div>
           </div>
 
           {/* CENTER: Bingo Card */}
@@ -150,22 +142,19 @@ export default function App() {
               drawnBalls={drawnBalls}
               hintsEnabled={settings.hints}
               isGameOver={isGameOver}
-              isPaused={!!activeChoice}
               lastBingoTime={gameState.lastBingoTime}
               onMarkCell={markCell}
               blockedCells={boss.blockedCells}
+              frozenCells={boss.frozenCells}
+              blindCells={boss.blindCells}
             />
           </div>
 
           {/* RIGHT: Live Boss Zone */}
           <LiveBossZone
             boss={boss}
-            activeChoice={activeChoice}
-            choiceTimer={choiceTimer}
-            onSelectCast={applyCast}
-            onReroll={rerollChoices}
-            canReroll={currentScore >= 50}
-            onSwitchType={switchBossType}
+            onTriggerBossAction={triggerBossAction}
+            onTriggerPlayerAction={triggerPlayerAction}
           />
         </div>
       </div>
@@ -173,9 +162,9 @@ export default function App() {
       {/* WIN MODAL */}
       <WinModal
         isOpen={isGameOver}
-        title={boss.progress >= 500 ? "Binky Won!" : (currentScore >= 500 ? "Super Treasure!" : "Treasure Collected!")}
-        amount={boss.progress >= 500 ? 0 : (currentScore >= 500 ? 10000 : 5000)}
-        icon={boss.progress >= 500 ? "😭" : (currentScore >= 500 ? "🏺" : "💰")}
+        title={currentScore >= 500 ? "Super Treasure!" : "Treasure Collected!"}
+        amount={currentScore >= 500 ? 10000 : 5000}
+        icon={currentScore >= 500 ? "🏺" : "💰"}
         score={currentScore}
         onReset={resetGame}
       />

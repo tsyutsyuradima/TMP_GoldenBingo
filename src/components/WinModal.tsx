@@ -38,7 +38,7 @@ export const WinModal: React.FC<WinModalProps> = ({
             
             <motion.div
               animate={{ y: [0, -10, 0] }}
-              transition={{ repeat: Infinity, duration: 2 }}
+              transition={{ repeat: Infinity, duration: 2, type: "tween" }}
               className="mb-10 p-6 bg-amber-50 rounded-[2rem] border-2 border-amber-100"
             >
               <p className="text-xs uppercase font-black text-amber-500 mb-1">Coins Earned</p>

@@ -21,10 +21,11 @@ interface BingoBoardProps {
   drawnBalls: number[];
   hintsEnabled: boolean;
   isGameOver: boolean;
-  isPaused: boolean;
   lastBingoTime: number;
   onMarkCell: (index: number) => void;
   blockedCells: number[];
+  frozenCells: number[];
+  blindCells: number[];
 }
 
 export const BingoBoard: React.FC<BingoBoardProps> = ({
@@ -34,10 +35,11 @@ export const BingoBoard: React.FC<BingoBoardProps> = ({
   drawnBalls,
   hintsEnabled,
   isGameOver,
-  isPaused,
   lastBingoTime,
   onMarkCell,
   blockedCells,
+  frozenCells,
+  blindCells,
 }) => {
   const [showBingo, setShowBingo] = React.useState(false);
   const boardRef = React.useRef<HTMLDivElement>(null);
@@ -56,35 +58,6 @@ export const BingoBoard: React.FC<BingoBoardProps> = ({
       {/* Golden Card Frame */}
       <div className="bg-gradient-to-b from-amber-400 via-amber-500 to-amber-600 p-2.5 sm:p-3 rounded-2xl shadow-[0_8px_32px_rgba(180,83,9,0.35)]">
         <div className="bg-amber-100/90 rounded-xl overflow-hidden relative">
-          {/* Pause Overlay */}
-          <AnimatePresence>
-            {isPaused && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="absolute inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center"
-              >
-                <motion.div
-                  initial={{ scale: 0.8 }}
-                  animate={{ scale: [1, 1.03, 1] }}
-                  transition={{ repeat: Infinity, duration: 2 }}
-                  className="text-center"
-                >
-                  <motion.span
-                    animate={{ rotate: [0, 10, -10, 0] }}
-                    transition={{ repeat: Infinity, duration: 2 }}
-                    className="text-5xl block mb-3"
-                  >
-                    ⏸️
-                  </motion.span>
-                  <h3 className="text-xl font-black text-white uppercase tracking-tight">Paused</h3>
-                  <p className="text-[10px] text-amber-400 font-bold uppercase tracking-widest animate-pulse mt-1">Choose a spell!</p>
-                </motion.div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
           {/* BINGO! Banner */}
           <AnimatePresence>
             {showBingo && (
@@ -123,7 +96,9 @@ export const BingoBoard: React.FC<BingoBoardProps> = ({
               const letter = BINGO_LETTERS[col];
               const isMarked = markedCells[i];
               const isBlocked = blockedCells.includes(i);
-              const canBeMarked = !isBlocked && (val === "FREE" || drawnBalls.includes(val as number));
+              const isFrozen = frozenCells.includes(i);
+              const isBlind = blindCells.includes(i);
+              const canBeMarked = !isBlocked && !isFrozen && (val === "FREE" || drawnBalls.includes(val as number));
               const bonus = bonusCells[i];
               const isFree = val === "FREE";
 
@@ -131,10 +106,10 @@ export const BingoBoard: React.FC<BingoBoardProps> = ({
                 <motion.div
                   key={i}
                   data-cell-index={i}
-                  whileHover={!isMarked && !isGameOver && !isBlocked ? { scale: 1.06 } : {}}
-                  whileTap={!isMarked && !isGameOver && !isBlocked ? { scale: 0.94 } : {}}
+                  whileHover={!isMarked && !isGameOver && !isBlocked && !isFrozen ? { scale: 1.06 } : {}}
+                  whileTap={!isMarked && !isGameOver && !isBlocked && !isFrozen ? { scale: 0.94 } : {}}
                   onClick={(e) => {
-                    if (isGameOver || isMarked || isBlocked) return;
+                    if (isGameOver || isMarked || isBlocked || isFrozen) return;
                     if (canBeMarked) {
                       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                       triggerExplosion(
@@ -148,9 +123,10 @@ export const BingoBoard: React.FC<BingoBoardProps> = ({
                   }}
                   className={`
                     aspect-square flex items-center justify-center font-bold rounded-md cursor-pointer
-                    transition-all duration-200 select-none relative
-                    ${isBlocked ? 'opacity-40 cursor-not-allowed' : ''}
-                    ${!isMarked && !isBlocked && canBeMarked && hintsEnabled
+                    transition-all duration-200 select-none relative overflow-hidden
+                    ${isBlocked || isFrozen ? 'cursor-not-allowed' : ''}
+                    ${isBlocked ? 'opacity-40' : ''}
+                    ${!isMarked && !isBlocked && !isFrozen && canBeMarked && hintsEnabled
                       ? 'ring-4 ring-green-400 ring-inset shadow-[0_0_20px_rgba(74,222,128,0.8),inset_0_0_15px_rgba(74,222,128,0.4)] animate-pulse z-10'
                       : ''}
                   `}
@@ -184,8 +160,52 @@ export const BingoBoard: React.FC<BingoBoardProps> = ({
                     </span>
                   )}
 
+                  {/* Frozen overlay */}
+                  {isFrozen && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="absolute inset-0 flex items-center justify-center rounded-md"
+                      style={{ background: 'linear-gradient(135deg, rgba(147,197,253,0.75) 0%, rgba(191,219,254,0.85) 100%)' }}
+                    >
+                      <motion.span
+                        animate={{ scale: [1, 1.15, 1], rotate: [0, 15, -15, 0] }}
+                        transition={{ repeat: Infinity, duration: 2.5, ease: 'easeInOut', type: "tween" }}
+                        className="text-xl sm:text-2xl drop-shadow"
+                      >
+                        ❄️
+                      </motion.span>
+                      {/* Ice shimmer */}
+                      <motion.div
+                        animate={{ x: ['-100%', '200%'] }}
+                        transition={{ repeat: Infinity, duration: 2, ease: 'linear' }}
+                        className="absolute inset-0 w-1/3 bg-gradient-to-r from-transparent via-white/40 to-transparent skew-x-[-20deg]"
+                      />
+                    </motion.div>
+                  )}
+
+                  {/* Blind overlay */}
+                  {isBlind && !isFrozen && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="absolute inset-0 flex items-center justify-center rounded-md backdrop-blur-[3px]"
+                      style={{ background: 'rgba(15,23,42,0.72)' }}
+                    >
+                      <motion.span
+                        animate={{ scale: [1, 1.1, 1], opacity: [0.8, 1, 0.8] }}
+                        transition={{ repeat: Infinity, duration: 1.8, type: "tween" }}
+                        className="text-lg sm:text-xl"
+                      >
+                        ❓
+                      </motion.span>
+                    </motion.div>
+                  )}
+
                   {/* Bonus badge */}
-                  {bonus && !isMarked && !isBlocked && (
+                  {bonus && !isMarked && !isBlocked && !isFrozen && (
                     <div className="absolute -top-0.5 -right-0.5 text-[8px] px-1 py-0.5 rounded font-black bg-gradient-to-br from-amber-500 to-yellow-400 text-white shadow-sm animate-bounce z-10 leading-none">
                       +{bonus.val}
                     </div>

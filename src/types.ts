@@ -16,37 +16,24 @@ export interface GameSettings {
   autoDraw: boolean;
 }
 
-export interface Cast {
+export type BossChatMessageType = 'boss_idle' | 'boss_action' | 'boss_reaction' | 'system';
+
+export interface BossChatMessage {
   id: string;
-  name: string;
-  description: string;
-  icon: string;
-  juice: string;
-  activeDurationMs?: number;
-  onExecute?: (boss: BossState) => BossState;
+  type: BossChatMessageType;
+  text: string;
+  actionIcon?: string;
+  timestamp: number;
 }
 
-export type BossType = 'goal' | 'active';
-
 export interface BossState {
-  type: BossType;
-  progress: number;
-  isPaused: boolean;
-  isBlurred: boolean;
-  isSlowed: boolean;
-  message: string;
+  chatLog: BossChatMessage[];
   lastAction: string | null;
   currentAction: string | null;
   reaction: 'idle' | 'happy' | 'angry' | 'surprised' | 'sleeping' | 'focused' | 'taunting' | 'scared' | 'confused' | 'evil' | 'dizzy';
-  blockedCells: number[]; // Indices of blocked cells
-  nextActionProgress: number; // 0 to 100 for Active mode
-  activeSpellId?: string | null;
-}
-
-export interface Projectile {
-  id: string;
-  type: 'block' | 'remove-daub' | 'scramble';
-  targetIndex: number;
+  blockedCells: number[];
+  frozenCells: number[];
+  blindCells: number[];
 }
 
 export interface GameState {
@@ -59,8 +46,5 @@ export interface GameState {
   settings: GameSettings;
   milestones: Milestone[];
   boss: BossState;
-  activeChoice: Cast[] | null;
-  choiceTimer: number;
   lastBingoTime: number;
-  projectiles: Projectile[];
 }

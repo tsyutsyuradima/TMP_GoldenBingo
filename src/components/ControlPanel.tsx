@@ -61,7 +61,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
               {isLatest && (
                 <motion.div
                   animate={{ scale: [1, 1.3, 1], opacity: [0.6, 0, 0.6] }}
-                  transition={{ repeat: Infinity, duration: 1.5 }}
+                  transition={{ repeat: Infinity, duration: 1.5, type: "tween" }}
                   className="absolute inset-0 rounded-full border-2"
                   style={{ borderColor: color }}
                 />

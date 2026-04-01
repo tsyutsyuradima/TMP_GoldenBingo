@@ -1,63 +1,59 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { BossState, Cast } from '../types';
-import { BOSS_MESSAGES } from '../constants';
-import { BOSS_CONFIG } from '../config/bossConfig';
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { BossState, BossChatMessage, BossChatMessageType } from '../types';
+import { BOSS_CHAT_MESSAGES } from '../config/bossChatConfig';
 
-export function useBossLogic(isGameOver: boolean) {
-  const [boss, setBoss] = useState<BossState>({
-    type: 'goal',
-    progress: 0,
-    isPaused: false,
-    isBlurred: false,
-    isSlowed: false,
-    message: BOSS_MESSAGES.idle[0],
+const MAX_CHAT_LOG = 50;
+
+function makeChatMessage(type: BossChatMessageType, text: string, actionIcon?: string): BossChatMessage {
+  return { id: `${Date.now()}-${Math.random()}`, type, text, actionIcon, timestamp: Date.now() };
+}
+
+function createInitialBoss(): BossState {
+  const startMsg = BOSS_CHAT_MESSAGES.gameStart[Math.floor(Math.random() * BOSS_CHAT_MESSAGES.gameStart.length)];
+  return {
+    chatLog: [makeChatMessage('system', startMsg)],
     lastAction: null,
     currentAction: null,
     reaction: 'idle',
     blockedCells: [],
-    nextActionProgress: 0
-  });
+    frozenCells: [],
+    blindCells: [],
+  };
+}
 
-  const bossTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const actionTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const activeBossTimerRef = useRef<NodeJS.Timeout | null>(null);
+export function useBossLogic(isGameOver: boolean) {
+  const [boss, setBoss] = useState<BossState>(createInitialBoss);
   const reactionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const activeSpellTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const resetBoss = useCallback(() => {
+  const pushChat = useCallback((type: BossChatMessageType, text: string, actionIcon?: string) => {
     setBoss(prev => ({
       ...prev,
-      progress: 0,
-      isPaused: false,
-      isBlurred: false,
-      isSlowed: false,
-      message: BOSS_MESSAGES.idle[0],
-      lastAction: null,
-      currentAction: null,
-      reaction: 'idle',
-      blockedCells: [],
-      nextActionProgress: 0,
-      activeSpellId: null
+      chatLog: [...prev.chatLog, makeChatMessage(type, text, actionIcon)].slice(-MAX_CHAT_LOG),
     }));
-    if (activeSpellTimeoutRef.current) clearTimeout(activeSpellTimeoutRef.current);
   }, []);
 
-  const switchBossType = useCallback((type: BossState['type']) => {
-    if (activeSpellTimeoutRef.current) clearTimeout(activeSpellTimeoutRef.current);
-    
-    setBoss(prev => {
-      if (prev.type === type) return prev;
-      return {
-        ...prev,
-        type,
-        activeSpellId: null,
-        isPaused: false,
-        isSlowed: false,
-        isBlurred: false,
-        message: type === 'active' ? "Let's play together! 😈" : "Try to beat my progress! 🐰",
-        reaction: 'evil'
-      };
-    });
+  // Idle taunts every 12-20 seconds
+  useEffect(() => {
+    if (isGameOver) return;
+    const schedule = () => {
+      const delay = 12000 + Math.random() * 8000;
+      idleTimerRef.current = setTimeout(() => {
+        const pool = BOSS_CHAT_MESSAGES.idle;
+        const text = pool[Math.floor(Math.random() * pool.length)];
+        setBoss(prev => ({
+          ...prev,
+          chatLog: [...prev.chatLog, makeChatMessage('boss_idle', text)].slice(-MAX_CHAT_LOG),
+        }));
+        schedule();
+      }, delay);
+    };
+    schedule();
+    return () => { if (idleTimerRef.current) clearTimeout(idleTimerRef.current); };
+  }, [isGameOver]);
+
+  const resetBoss = useCallback(() => {
+    setBoss(createInitialBoss());
   }, []);
 
   const setReaction = useCallback((reaction: BossState['reaction'], duration = 2000) => {
@@ -68,200 +64,63 @@ export function useBossLogic(isGameOver: boolean) {
     }, duration);
   }, []);
 
-  const triggerBossAction = useCallback(() => {
-    if (isGameOver || boss.isPaused) return;
-
-    const actions = ['daub', 'powerup'];
-    const action = actions[Math.floor(Math.random() * actions.length)];
-    
-    setBoss(prev => {
-      let increment = 0;
-      let message = "";
-      let reaction: BossState['reaction'] = 'happy';
-
-      if (action === 'daub') {
-        increment = 10;
-        message = BOSS_MESSAGES.reaction.daub[Math.floor(Math.random() * BOSS_MESSAGES.reaction.daub.length)];
-        reaction = 'happy';
-      } else if (action === 'powerup') {
-        increment = 25;
-        message = BOSS_MESSAGES.reaction.powerup[Math.floor(Math.random() * BOSS_MESSAGES.reaction.powerup.length)];
-        reaction = 'taunting';
-      }
-
-      return {
-        ...prev,
-        progress: Math.min(BOSS_CONFIG.maxProgress, prev.progress + increment),
-        message,
-        reaction,
-        currentAction: action
-      };
-    });
-
-    // Clear action after 3s
+  const triggerSpecificBossAction = useCallback((action: 'block' | 'freeze' | 'blind') => {
+    if (isGameOver) return;
+    const actionMessages: Record<string, string[]> = {
+      block: BOSS_CHAT_MESSAGES.action.block,
+      freeze: BOSS_CHAT_MESSAGES.action.freeze,
+      blind: BOSS_CHAT_MESSAGES.action.blind,
+    };
+    const actionIcons: Record<string, string> = { block: '🚫', freeze: '❄️', blind: '❓' };
+    const pool = actionMessages[action];
+    const text = pool[Math.floor(Math.random() * pool.length)];
+    setBoss(prev => ({
+      ...prev,
+      reaction: 'evil',
+      currentAction: action,
+      chatLog: [...prev.chatLog, makeChatMessage('boss_action', text, actionIcons[action])].slice(-MAX_CHAT_LOG),
+    }));
     setTimeout(() => {
       setBoss(prev => ({ ...prev, currentAction: null, reaction: 'idle' }));
     }, 3000);
-  }, [isGameOver, boss.isPaused]);
+  }, [isGameOver]);
 
-  const applyBossEffect = useCallback((cast: Cast) => {
-    if (activeSpellTimeoutRef.current) clearTimeout(activeSpellTimeoutRef.current);
+  const triggerMilestoneAction = useCallback(() => {
+    const actions = ['block', 'freeze', 'blind'] as const;
+    triggerSpecificBossAction(actions[Math.floor(Math.random() * actions.length)]);
+  }, [triggerSpecificBossAction]);
 
-    setBoss(prev => {
-      const cleanState = { 
-        ...prev, 
-        isPaused: false, 
-        isSlowed: false, 
-        isBlurred: false 
-      };
-
-      let newBoss = { 
-        ...cleanState, 
-        lastAction: cast.id, 
-        activeSpellId: cast.activeDurationMs ? cast.id : null,
-        message: BOSS_MESSAGES.hit[Math.floor(Math.random() * BOSS_MESSAGES.hit.length)],
-        reaction: 'angry' as const
-      };
-      
-      if (cast.onExecute) {
-        newBoss = cast.onExecute(newBoss);
-      }
-      return newBoss;
-    });
-
-    if (cast.activeDurationMs) {
-      activeSpellTimeoutRef.current = setTimeout(() => {
-        setBoss(curr => {
-          if (curr.activeSpellId !== cast.id) return curr;
-          return { 
-            ...curr, 
-            isPaused: false, 
-            isSlowed: false, 
-            isBlurred: false, 
-            activeSpellId: null, 
-            reaction: 'idle', 
-            message: BOSS_MESSAGES.idle[0] 
-          };
-        });
-      }, cast.activeDurationMs);
-    }
+  const triggerPlayerAction = useCallback((actionId: string) => {
+    const effects: Record<string, { reaction: BossState['reaction']; icon: string }> = {
+      'tea-break':      { reaction: 'sleeping', icon: '☕' },
+      'golden-nap':     { reaction: 'sleeping', icon: '💤' },
+      'foggy-glasses':  { reaction: 'confused', icon: '👓' },
+      'cookie-crumbs':  { reaction: 'happy',    icon: '🍪' },
+      'lucky-magnet':   { reaction: 'scared',   icon: '🧲' },
+    };
+    const effect = effects[actionId];
+    if (!effect) return;
+    const pool = BOSS_CHAT_MESSAGES.playerReaction[actionId];
+    const text = pool ? pool[Math.floor(Math.random() * pool.length)] : "Huh?!";
+    setBoss(prev => ({
+      ...prev,
+      reaction: effect.reaction,
+      chatLog: [...prev.chatLog, makeChatMessage('boss_reaction', text, effect.icon)].slice(-MAX_CHAT_LOG),
+    }));
+    if (reactionTimeoutRef.current) clearTimeout(reactionTimeoutRef.current);
+    reactionTimeoutRef.current = setTimeout(() => {
+      setBoss(prev => ({ ...prev, reaction: 'idle' }));
+    }, 3000);
   }, []);
-
-  // Main tick for Boss Progress
-  useEffect(() => {
-    if (!isGameOver && !boss.isPaused) {
-      bossTimerRef.current = setInterval(() => {
-        setBoss(prev => {
-          if (prev.isPaused || isGameOver) return prev;
-          
-          let increment = BOSS_CONFIG.baseIncrement;
-          if (prev.isBlurred) increment = BOSS_CONFIG.slowIncrement;
-          if (prev.isSlowed) increment = Math.max(1, Math.floor(increment * BOSS_CONFIG.slowMultiplier));
-
-          const newProgress = Math.min(BOSS_CONFIG.maxProgress, prev.progress + increment);
-          
-          let newMessage = prev.message;
-          let newReaction = prev.reaction;
-
-          if (prev.type === 'goal' && newProgress % BOSS_CONFIG.tauntFrequency === 0) {
-            newMessage = BOSS_MESSAGES.taunt[Math.floor(Math.random() * BOSS_MESSAGES.taunt.length)];
-            newReaction = 'taunting';
-          }
-
-          if (prev.type === 'goal' && newProgress >= BOSS_CONFIG.maxProgress) {
-            return { ...prev, progress: BOSS_CONFIG.maxProgress, message: BOSS_MESSAGES.win[0], reaction: 'happy' };
-          }
-
-          return { ...prev, progress: newProgress, message: newMessage, reaction: newReaction };
-        });
-      }, BOSS_CONFIG.tickIntervalMs);
-    } else {
-      if (bossTimerRef.current) clearInterval(bossTimerRef.current);
-    }
-    return () => {
-      if (bossTimerRef.current) clearInterval(bossTimerRef.current);
-    };
-  }, [isGameOver, boss.isPaused, boss.isBlurred, boss.isSlowed]);
-
-  // Active Boss Actions Effect (Granular for progress bar)
-  useEffect(() => {
-    if (!isGameOver && !boss.isPaused && boss.type === 'active') {
-      const stepMs = 100;
-      const totalMs = BOSS_CONFIG.activeBoss.actionIntervalMs;
-      const increment = (stepMs / totalMs) * 100;
-
-      activeBossTimerRef.current = setInterval(() => {
-        setBoss(prev => {
-          if (prev.isPaused || isGameOver || prev.type !== 'active') return prev;
-          
-          const newProgress = prev.nextActionProgress + increment;
-          
-          if (newProgress >= 100) {
-            // Trigger action
-            const actions = ['block', 'remove-daub', 'scramble', 'remove-points'];
-            const action = actions[Math.floor(Math.random() * actions.length)];
-            
-            let message = "";
-            let reaction: BossState['reaction'] = 'evil';
-            let currentAction = action;
-
-            if (action === 'block') {
-              message = "I'm blocking this cell! 🚫";
-            } else if (action === 'remove-daub') {
-              message = "Oops! Did you lose something? 🧼";
-            } else if (action === 'scramble') {
-              message = "Let's mix it up! 🌪️";
-            } else if (action === 'remove-points') {
-              message = "I'll take some points! 💰";
-            }
-
-            // Clear action after 3s
-            setTimeout(() => {
-              setBoss(p => ({ ...p, currentAction: null, reaction: 'idle' }));
-            }, 3000);
-
-            return {
-              ...prev,
-              nextActionProgress: 0,
-              message,
-              reaction,
-              currentAction
-            };
-          }
-
-          return { ...prev, nextActionProgress: newProgress };
-        });
-      }, stepMs);
-    } else {
-      if (activeBossTimerRef.current) clearInterval(activeBossTimerRef.current);
-    }
-    return () => {
-      if (activeBossTimerRef.current) clearInterval(activeBossTimerRef.current);
-    };
-  }, [isGameOver, boss.isPaused, boss.type]);
-
-  // Random actions for Goal Mode
-  useEffect(() => {
-    if (!isGameOver && !boss.isPaused && boss.type === 'goal') {
-      actionTimerRef.current = setInterval(() => {
-        if (Math.random() > 0.7) { // 30% chance every 5s
-          triggerBossAction();
-        }
-      }, 5000);
-    } else {
-      if (actionTimerRef.current) clearInterval(actionTimerRef.current);
-    }
-    return () => {
-      if (actionTimerRef.current) clearInterval(actionTimerRef.current);
-    };
-  }, [isGameOver, boss.isPaused, triggerBossAction, boss.type]);
 
   return {
     boss,
-    applyBossEffect,
     resetBoss,
     setBoss,
     setReaction,
-    switchBossType
+    pushChat,
+    triggerMilestoneAction,
+    triggerSpecificBossAction,
+    triggerPlayerAction,
   };
 }
